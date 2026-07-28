@@ -82,6 +82,10 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
   useEffect(() => {
     const handler = (e: CustomEvent<string>) => {
       setValue('selected_service', e.detail, { shouldValidate: true })
+      setTimeout(() => {
+        document.getElementById('selected_service')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        document.getElementById('selected_service')?.focus()
+      }, 500)
     }
     window.addEventListener('selectPromo', handler as EventListener)
     return () => window.removeEventListener('selectPromo', handler as EventListener)
@@ -433,6 +437,11 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                     <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
                   </div>
                   {errors.selected_service && <p className="text-red-500 text-xs mt-1.5" role="alert">{errors.selected_service.message}</p>}
+                  {selectedService && !errors.selected_service && (
+                    <p className="text-green-600 text-xs mt-1.5 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Paket dipilih: <span className="font-semibold">{selectedService}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Alamat Instalasi */}
