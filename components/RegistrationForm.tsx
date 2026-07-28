@@ -123,44 +123,75 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: (f: File | null) => void,
     setError: (e: string) => void,
-    setPreview: (s: string | null) => void
+    setPreview: (s: string | null) => void,
+    isKtp: boolean
   ) => {
     const file = e.target.files?.[0]
     setError('')
     setPreview(null)
     if (!file) { setFile(null); return }
-    const allowed = ['image/jpeg', 'image/png', 'application/pdf']
+
+    if (isKtp) {
+      setKtpFile(null); setKtpPreview(null)
+    }
+
+    const allowed = ['image/jpeg', 'image/png']
     if (!allowed.includes(file.type)) {
-      setError('Format file harus JPG, PNG, atau PDF'); setFile(null); return
+      setError('Format file harus JPG atau PNG'); setFile(null); return
     }
     if (file.size > 5 * 1024 * 1024) {
       setError('Ukuran file maksimal 5MB'); setFile(null); return
     }
-    setFile(file)
+    await new Promise(r => setTimeout(r, 0))
     if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = (ev) => setPreview(ev.target?.result as string)
-      reader.readAsDataURL(file)
-
-      setIsOcrLoading(true)
-      try {
-        const ekycForm = new FormData()
-        ekycForm.append('file', file)
-        const res = await fetch('/api/ekyc', { method: 'POST', body: ekycForm })
-        const json = await res.json()
-        if (json.success && json.data.nik) {
-          const { nik, full_name, birth_date } = json.data
-          setValue('nik', nik, { shouldValidate: true })
-          if (full_name) setValue('full_name', full_name, { shouldValidate: true })
-          if (birth_date) setValue('birth_date', birth_date, { shouldValidate: true })
-          setTimeout(() => setShowOcrConfirm(true), 300)
-        } else {
-          toast('Gagal membaca KTP. Coba foto yang lebih jelas.', { icon: '⚠️' })
+      if (isKtp) {
+        const validAspect = await new Promise<boolean>((resolve) => {
+          const img = new Image()
+          img.onload = () => {
+            const ratio = img.width / img.height
+            URL.revokeObjectURL(img.src)
+            resolve(ratio >= 0.9 && ratio <= 2.2)
+          }
+          img.onerror = () => resolve(true)
+          img.src = URL.createObjectURL(file)
+        })
+        if (!validAspect) {
+          setKtpError('Gambar yang diunggah bukan KTP atau tidak terbaca dengan jelas.')
+          setKtpFile(null); setKtpPreview(null); setIsOcrLoading(false)
+          if (ktpInputRef.current) ktpInputRef.current.value = ''
+          return
         }
-      } catch {
-        toast.error('Gagal membaca KTP. Coba upload foto yang lebih jelas.')
-      } finally {
-        setIsOcrLoading(false)
+
+        setIsOcrLoading(true)
+        try {
+          const ekycForm = new FormData()
+          ekycForm.append('file', file)
+          const res = await fetch('/api/ekyc', { method: 'POST', body: ekycForm })
+          const json = await res.json()
+          if (json.success && json.data.nik) {
+            const { nik, full_name, birth_date } = json.data
+            setValue('nik', nik, { shouldValidate: true })
+            if (full_name) setValue('full_name', full_name, { shouldValidate: true })
+            if (birth_date) setValue('birth_date', birth_date, { shouldValidate: true })
+            setTimeout(() => setShowOcrConfirm(true), 300)
+          } else {
+            toast('Gagal membaca KTP. Coba foto yang lebih jelas.', { icon: '⚠️' })
+          }
+        } catch {
+          toast.error('Gagal membaca KTP. Coba upload foto yang lebih jelas.')
+        } finally {
+          setIsOcrLoading(false)
+        }
+
+        setFile(file)
+        const reader = new FileReader()
+        reader.onload = (ev) => setPreview(ev.target?.result as string)
+        reader.readAsDataURL(file)
+      } else {
+        setFile(file)
+        const reader = new FileReader()
+        reader.onload = (ev) => setPreview(ev.target?.result as string)
+        reader.readAsDataURL(file)
       }
     }
   }
@@ -195,9 +226,15 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
         if (rumahInputRef.current) rumahInputRef.current.value = ''
       } else {
         toast.error(json.message || 'Terjadi kesalahan. Silakan coba lagi.')
+        setKtpFile(null); setKtpPreview(null); setNikParsed(false); setRumahFile(null); setRumahPreview(null)
+        if (ktpInputRef.current) ktpInputRef.current.value = ''
+        if (rumahInputRef.current) rumahInputRef.current.value = ''
       }
     } catch {
       toast.error('Gagal mengirim data. Periksa koneksi internet Anda.')
+      setKtpFile(null); setKtpPreview(null); setNikParsed(false); setRumahFile(null); setRumahPreview(null)
+      if (ktpInputRef.current) ktpInputRef.current.value = ''
+      if (rumahInputRef.current) rumahInputRef.current.value = ''
     } finally {
       setIsSubmitting(false)
     }
@@ -280,8 +317,14 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
         tabIndex={0}
         role="button"
       >
-        <input ref={inputRef} type="file" accept="image/jpeg,image/png,application/pdf" onChange={onChange} className="hidden" aria-hidden="true" />
-        {preview ? (
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png" onChange={onChange} className="hidden" aria-hidden="true" />
+        {error ? (
+          <>
+            <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" aria-hidden="true" />
+            <p className="text-slate-600 text-sm font-medium mb-1">Klik untuk upload</p>
+            <p className="text-slate-400 text-xs">JPG Atau PNG · Maks. 5MB</p>
+          </>
+        ) : preview ? (
           <div className="relative">
             <img src={preview} alt="" className="max-h-40 mx-auto rounded-lg object-contain" />
             <button type="button" className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md" onClick={(e) => { e.stopPropagation(); onRemove() }} aria-label="Hapus">
@@ -297,7 +340,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
           <>
             <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" aria-hidden="true" />
             <p className="text-slate-600 text-sm font-medium mb-1">Klik untuk upload</p>
-            <p className="text-slate-400 text-xs">JPG, PNG, atau PDF · Maks. 5MB</p>
+            <p className="text-slate-400 text-xs">JPG Atau PNG · Maks. 5MB</p>
           </>
         )}
       </div>
@@ -340,7 +383,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                   preview={ktpPreview}
                   inputRef={ktpInputRef}
                   label="Foto KTP"
-                  onChange={(e) => handleFileUpload(e, setKtpFile, setKtpError, setKtpPreview)}
+                  onChange={(e) => handleFileUpload(e, setKtpFile, setKtpError, setKtpPreview, true)}
                   onRemove={() => { setKtpFile(null); setKtpPreview(null); setNikParsed(false); if (ktpInputRef.current) ktpInputRef.current.value = '' }}
                 />
                 {isOcrLoading && (
@@ -488,7 +531,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                   preview={rumahPreview}
                   inputRef={rumahInputRef}
                   label="Foto Depan Rumah"
-                  onChange={(e) => handleFileUpload(e, setRumahFile, setRumahError, setRumahPreview)}
+                  onChange={(e) => handleFileUpload(e, setRumahFile, setRumahError, setRumahPreview, false)}
                   onRemove={() => { setRumahFile(null); setRumahPreview(null); if (rumahInputRef.current) rumahInputRef.current.value = '' }}
                 />
 

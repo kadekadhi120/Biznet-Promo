@@ -5,7 +5,7 @@ import { encrypt } from '@/lib/crypto'
 import { isDevMode } from '@/lib/mock-data'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'application/pdf']
+const ALLOWED_MIME = ['image/jpeg', 'image/png']
 
 async function uploadFile(
   supabase: ReturnType<typeof createServiceClient>,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Ukuran file KTP maksimal 5MB' }, { status: 400 })
     }
     if (!ALLOWED_MIME.includes(ktp_photo.type)) {
-      return NextResponse.json({ success: false, message: 'Format file KTP harus JPG, PNG, atau PDF' }, { status: 400 })
+      return NextResponse.json({ success: false, message: 'Format file KTP harus JPG Atau PNG' }, { status: 400 })
     }
     if (!installation_address || installation_address.length < 10) {
       return NextResponse.json({ success: false, message: 'Alamat instalasi minimal 10 karakter' }, { status: 400 })
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Ukuran foto rumah maksimal 5MB' }, { status: 400 })
       }
       if (!ALLOWED_MIME.includes(front_house_photo.type)) {
-        return NextResponse.json({ success: false, message: 'Format foto rumah harus JPG, PNG, atau PDF' }, { status: 400 })
+        return NextResponse.json({ success: false, message: 'Format foto rumah harus JPG Atau PNG' }, { status: 400 })
       }
     }
 
