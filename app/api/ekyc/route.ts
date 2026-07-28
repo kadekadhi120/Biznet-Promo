@@ -6,6 +6,7 @@ import crypto from 'crypto'
 // Untuk file lain (non-KTP / KTP lain) → return error.
 
 const ALLOWED = ['image/jpeg', 'image/png']
+const ALLOWED_EXT = ['.jpg', '.jpeg', '.png']
 const MIN_FILE = 30 * 1024
 const MAX_FILE = 10 * 1024 * 1024
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (!file) {
       return NextResponse.json({ success: false, message: 'File tidak ditemukan' }, { status: 400 })
     }
-    if (!ALLOWED.includes(file.type)) {
+    if (!ALLOWED.includes(file.type) || !ALLOWED_EXT.includes('.' + file.name.split('.').pop()!.toLowerCase())) {
       return NextResponse.json({ success: false, message: 'Gambar yang diunggah bukan KTP atau tidak terbaca dengan jelas.' }, { status: 400 })
     }
     if (file.size < MIN_FILE || file.size > MAX_FILE) {

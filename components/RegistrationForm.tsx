@@ -135,8 +135,10 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
       setKtpFile(null); setKtpPreview(null)
     }
 
-    const allowed = ['image/jpeg', 'image/png']
-    if (!allowed.includes(file.type)) {
+    const allowedMime = ['image/jpeg', 'image/png']
+    const allowedExt = ['.jpg', '.jpeg', '.png']
+    const ext = file.name.toLowerCase().split('.').pop()
+    if (!allowedMime.includes(file.type) || !ext || !allowedExt.includes('.' + ext)) {
       setError('Format file harus JPG atau PNG'); setFile(null); return
     }
     if (file.size > 5 * 1024 * 1024) {
