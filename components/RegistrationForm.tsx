@@ -61,6 +61,9 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
   const [rumahPreview, setRumahPreview] = useState<string | null>(null)
   const ktpInputRef = useRef<HTMLInputElement>(null)
   const rumahInputRef = useRef<HTMLInputElement>(null)
+  const [isOcrLoading, setIsOcrLoading] = useState(false)
+  const [nikParsed, setNikParsed] = useState(false)
+  const [showOcrConfirm, setShowOcrConfirm] = useState(false)
 
   const {
     register,
@@ -84,11 +87,35 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
     return () => window.removeEventListener('selectPromo', handler as EventListener)
   }, [setValue])
 
+  function parseNikDate(nik: string): string | null {
+    const mid = nik.slice(6, 12)
+    let dd = Number(mid.slice(0, 2))
+    const mm = mid.slice(2, 4)
+    const yy = mid.slice(4, 6)
+    if (dd > 40) dd -= 40
+    if (dd < 1 || dd > 31) return null
+    if (Number(mm) < 1 || Number(mm) > 12) return null
+    const fullYy = Number(yy) > new Date().getFullYear() % 100 ? 1900 + Number(yy) : 2000 + Number(yy)
+    return `${fullYy}-${mm}-${String(dd).padStart(2, '0')}`
+  }
+
+  const nikValue = watch('nik')
+  const formValues = watch()
+
+  useEffect(() => {
+    if (!/^\d{16}$/.test(nikValue)) { setNikParsed(false); return }
+    const date = parseNikDate(nikValue)
+    if (date) {
+      setValue('birth_date', date, { shouldValidate: true })
+      setNikParsed(true)
+    }
+  }, [nikValue, setValue])
+
   const packageOptions = Array.from(
     new Map(promos.map((p) => [p.name, p.name])).values()
   )
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setFile: (f: File | null) => void,
     setError: (e: string) => void,
@@ -110,6 +137,27 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
       const reader = new FileReader()
       reader.onload = (ev) => setPreview(ev.target?.result as string)
       reader.readAsDataURL(file)
+
+      setIsOcrLoading(true)
+      try {
+        const ekycForm = new FormData()
+        ekycForm.append('file', file)
+        const res = await fetch('/api/ekyc', { method: 'POST', body: ekycForm })
+        const json = await res.json()
+        if (json.success && json.data.nik) {
+          const { nik, full_name, birth_date } = json.data
+          setValue('nik', nik, { shouldValidate: true })
+          if (full_name) setValue('full_name', full_name, { shouldValidate: true })
+          if (birth_date) setValue('birth_date', birth_date, { shouldValidate: true })
+          setTimeout(() => setShowOcrConfirm(true), 300)
+        } else {
+          toast('Gagal membaca KTP. Coba foto yang lebih jelas.', { icon: '⚠️' })
+        }
+      } catch {
+        toast.error('Gagal membaca KTP. Coba upload foto yang lebih jelas.')
+      } finally {
+        setIsOcrLoading(false)
+      }
     }
   }
 
@@ -138,7 +186,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
       if (json.success) {
         setIsSuccess(true)
         toast.success('Pendaftaran berhasil! Tim kami akan segera menghubungi Anda.')
-        reset(); setKtpFile(null); setKtpPreview(null); setRumahFile(null); setRumahPreview(null)
+        reset(); setKtpFile(null); setKtpPreview(null); setRumahFile(null); setRumahPreview(null); setNikParsed(false)
         if (ktpInputRef.current) ktpInputRef.current.value = ''
         if (rumahInputRef.current) rumahInputRef.current.value = ''
       } else {
@@ -289,8 +337,13 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                   inputRef={ktpInputRef}
                   label="Foto KTP"
                   onChange={(e) => handleFileUpload(e, setKtpFile, setKtpError, setKtpPreview)}
-                  onRemove={() => { setKtpFile(null); setKtpPreview(null); if (ktpInputRef.current) ktpInputRef.current.value = '' }}
+                  onRemove={() => { setKtpFile(null); setKtpPreview(null); setNikParsed(false); if (ktpInputRef.current) ktpInputRef.current.value = '' }}
                 />
+                {isOcrLoading && (
+                  <div className="flex items-center gap-2 text-sm text-sky-600">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Membaca NIK dari KTP...
+                  </div>
+                )}
 
                 {/* Nama Lengkap */}
                 <div>
@@ -311,9 +364,11 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                   </label>
                   <div className="relative">
                     <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
-                    <input id="nik" type="text" inputMode="numeric" maxLength={16} placeholder="Nomor Induk Kependudukan" {...register('nik')} className={inputClass(!!errors.nik)} />
+                    <input id="nik" type="text" inputMode="numeric" maxLength={16} placeholder="Nomor Induk Kependudukan" {...register('nik')} className={cn(inputClass(!!errors.nik), nikParsed && 'pr-10')} />
+                    {nikParsed && <CheckCircle className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />}
                   </div>
                   {errors.nik && <p className="text-red-500 text-xs mt-1.5" role="alert">{errors.nik.message}</p>}
+                  {nikParsed && !errors.nik && <p className="text-green-600 text-xs mt-1.5">Format NIK valid</p>}
                 </div>
 
                 {/* Tanggal Lahir */}
@@ -485,6 +540,30 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
           </div>
         </div>
       </div>
+        {showOcrConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md mx-4 w-full border border-slate-100 animate-in fade-in zoom-in">
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-sky-200">
+                  <CheckCircle className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">Data KTP Terbaca</h3>
+                <p className="text-slate-500 text-sm mt-1">Periksa kembali data di bawah ini sebelum lanjut</p>
+              </div>
+              <div className="space-y-3 bg-slate-50 rounded-2xl p-4 mb-6 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500">Nama</span><span className="font-semibold text-slate-900 text-right max-w-[60%]">{formValues.full_name}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">NIK</span><span className="font-semibold text-slate-900">{formValues.nik}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Tanggal Lahir</span><span className="font-semibold text-slate-900">{formValues.birth_date ? new Date(formValues.birth_date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</span></div>
+              </div>
+              <button
+                onClick={() => setShowOcrConfirm(false)}
+                className="w-full bg-gradient-to-r from-sky-500 to-blue-500 hover:from-sky-400 hover:to-blue-400 text-white font-semibold py-3.5 px-6 rounded-xl transition-all hover:shadow-lg hover:shadow-sky-200"
+              >
+                Sudah Sesuai, Lanjutkan
+              </button>
+            </div>
+          </div>
+        )}
     </section>
   )
 }
