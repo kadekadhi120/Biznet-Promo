@@ -61,12 +61,6 @@ export default function Navbar() {
             </button>
             <button
               onClick={() => scrollTo('register')}
-              className="text-slate-300 hover:text-white transition-colors text-sm font-medium"
-            >
-              Daftar
-            </button>
-            <button
-              onClick={() => scrollTo('register')}
               className="bg-sky-500 hover:bg-sky-400 text-white text-sm font-semibold px-5 py-2 rounded-full transition-colors"
             >
               Daftar Sekarang
