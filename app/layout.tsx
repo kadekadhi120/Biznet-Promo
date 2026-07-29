@@ -77,7 +77,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id">
+    <html lang="id" style={{ colorScheme: 'only light' }}>
+        <head>
+          <meta name="color-scheme" content="only light" />
+        </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <CursorGlow />
         {children}
