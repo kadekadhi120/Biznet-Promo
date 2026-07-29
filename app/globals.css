@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ── Force light mode ─────────────────────────────────────── */
+html { color-scheme: light; }
+
 /* ── Custom properties ────────────────────────────────────── */
 :root {
   --foreground: #0f172a;
