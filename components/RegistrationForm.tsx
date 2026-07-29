@@ -103,6 +103,47 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
     return `${fullYy}-${mm}-${String(dd).padStart(2, '0')}`
   }
 
+  function parseKTPText(text: string): { nik: string; full_name: string; birth_place: string; birth_date: string } | null {
+    let nik = ''
+    const m16 = text.match(/\b\d{16}\b/)
+    if (m16) nik = m16[0]
+    if (!nik) {
+      const fuzzy = text.replace(/[?OoIl|!]/g, '').match(/\d{16}/)
+      if (fuzzy) nik = fuzzy[0]
+    }
+    if (!nik) return null
+
+    let full_name = '', birth_place = '', birth_date = ''
+
+    nameLoop:
+    for (const line of text.split('\n')) {
+      const t = line.trim()
+      if (!full_name) {
+        for (const sep of [':', '*', ':', '=']) {
+          const m = t.match(new RegExp(`^nama\\s*[${sep}]\\s*(.+)`, 'i'))
+          if (m) { full_name = m[1].replace(/[^A-Za-z\s.]/g, '').trim(); break nameLoop }
+        }
+        const m = t.match(/^[hn]ama\s*[:\s]\s*(.+)/i)
+        if (m) full_name = m[1].replace(/[^A-Za-z\s]/g, '').split(/\s+/).filter(w => w.length > 2 || /^[A-Z]/.test(w)).join(' ')
+      }
+    }
+
+    for (const line of text.split('\n')) {
+      const t = line.trim()
+      const m = t.match(/^temp\w*\s*\w*lahir\s*(.+)/i)
+      if (m) {
+        const raw = m[1].trim()
+        const bd = raw.match(/(\d{1,2})\s*[-.\/]\s*(\d{1,2})\s*[-.\/]\s*(\d{4})/)
+        if (bd) { birth_date = `${bd[1].padStart(2,'0')}-${bd[2].padStart(2,'0')}-${bd[3]}`; birth_place = raw.replace(bd[0], '').replace(/[,:\s]+$/, '').trim() }
+        else birth_place = raw
+        break
+      }
+    }
+
+    if (!full_name || !nik) return null
+    return { nik, full_name: full_name.toUpperCase(), birth_place: birth_place.toUpperCase(), birth_date }
+  }
+
   const nikValue = watch('nik')
   const formValues = watch()
 
@@ -135,52 +176,29 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
       setKtpFile(null); setKtpPreview(null)
     }
 
-    const allowedMime = ['image/jpeg', 'image/png']
     const allowedExt = ['.jpg', '.jpeg', '.png']
     const ext = file.name.toLowerCase().split('.').pop()
-    if (!allowedMime.includes(file.type) || !ext || !allowedExt.includes('.' + ext)) {
-      setError('Format file harus JPG atau PNG'); setFile(null); return
+    if (!ext || !allowedExt.includes('.' + ext) || (file.type && !file.type.startsWith('image/'))) {
+      setError('Format file harus JPG/JPEG atau PNG'); setFile(null); return
     }
     if (file.size > 5 * 1024 * 1024) {
       setError('Ukuran file maksimal 5MB'); setFile(null); return
     }
-    await new Promise(r => setTimeout(r, 0))
     if (file.type.startsWith('image/')) {
       if (isKtp) {
-        const validAspect = await new Promise<boolean>((resolve) => {
-          const img = new Image()
-          img.onload = () => {
-            const ratio = img.width / img.height
-            URL.revokeObjectURL(img.src)
-            resolve(ratio >= 0.9 && ratio <= 2.2)
-          }
-          img.onerror = () => resolve(true)
-          img.src = URL.createObjectURL(file)
-        })
-        if (!validAspect) {
-          setKtpError('Gambar yang diunggah bukan KTP atau tidak terbaca dengan jelas.')
-          setKtpFile(null); setKtpPreview(null); setIsOcrLoading(false)
-          if (ktpInputRef.current) ktpInputRef.current.value = ''
-          return
-        }
-
         setIsOcrLoading(true)
         try {
-          const ekycForm = new FormData()
-          ekycForm.append('file', file)
-          const res = await fetch('/api/ekyc', { method: 'POST', body: ekycForm })
-          const json = await res.json()
-          if (json.success && json.data.nik) {
-            const { nik, full_name, birth_date } = json.data
-            setValue('nik', nik, { shouldValidate: true })
-            if (full_name) setValue('full_name', full_name, { shouldValidate: true })
-            if (birth_date) setValue('birth_date', birth_date, { shouldValidate: true })
+          const Tesseract = (await import('tesseract.js')).default
+          const { data } = await Tesseract.recognize(file, 'ind+eng')
+          const parsed = parseKTPText(data.text)
+          if (parsed) {
+            setValue('nik', parsed.nik, { shouldValidate: true })
+            if (parsed.full_name) setValue('full_name', parsed.full_name, { shouldValidate: true })
+            if (parsed.birth_date) setValue('birth_date', parsed.birth_date, { shouldValidate: true })
             setTimeout(() => setShowOcrConfirm(true), 300)
-          } else {
-            toast('Gagal membaca KTP. Coba foto yang lebih jelas.', { icon: '⚠️' })
           }
         } catch {
-          toast.error('Gagal membaca KTP. Coba upload foto yang lebih jelas.')
+          // OCR error — user bisa isi manual
         } finally {
           setIsOcrLoading(false)
         }
@@ -388,6 +406,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                   onChange={(e) => handleFileUpload(e, setKtpFile, setKtpError, setKtpPreview, true)}
                   onRemove={() => { setKtpFile(null); setKtpPreview(null); setNikParsed(false); if (ktpInputRef.current) ktpInputRef.current.value = '' }}
                 />
+                <p className="text-slate-400 text-xs mt-1">Pastikan foto KTP jelas, tidak buram, dan semua data (NIK, Nama, TTL) terbaca.</p>
                 {isOcrLoading && (
                   <div className="flex items-center gap-2 text-sm text-sky-600">
                     <Loader2 className="w-4 h-4 animate-spin" /> Membaca NIK dari KTP...
@@ -603,6 +622,7 @@ export default function RegistrationForm({ promos }: RegistrationFormProps) {
                 </div>
                 <h3 className="text-xl font-bold text-slate-900">Data KTP Terbaca</h3>
                 <p className="text-slate-500 text-sm mt-1">Periksa kembali data di bawah ini sebelum lanjut</p>
+                <p className="text-amber-600 text-xs mt-2 bg-amber-50 rounded-lg p-2 border border-amber-200">⚠️ Pastikan data NIK dan Nama sesuai dengan KTP asli Anda. Data yang salah dapat menghambat proses pendaftaran.</p>
               </div>
               <div className="space-y-3 bg-slate-50 rounded-2xl p-4 mb-6 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500">Nama</span><span className="font-semibold text-slate-900 text-right max-w-[60%]">{formValues.full_name}</span></div>

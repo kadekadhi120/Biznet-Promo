@@ -5,7 +5,6 @@ import { encrypt } from '@/lib/crypto'
 import { isDevMode } from '@/lib/mock-data'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
-const ALLOWED_MIME = ['image/jpeg', 'image/png']
 const ALLOWED_EXT = ['.jpg', '.jpeg', '.png']
 
 async function uploadFile(
@@ -62,8 +61,9 @@ export async function POST(request: NextRequest) {
     if (ktp_photo.size > MAX_FILE_SIZE) {
       return NextResponse.json({ success: false, message: 'Ukuran file KTP maksimal 5MB' }, { status: 400 })
     }
-    if (!ALLOWED_MIME.includes(ktp_photo.type) || !ALLOWED_EXT.includes('.' + ktp_photo.name.split('.').pop()!.toLowerCase())) {
-      return NextResponse.json({ success: false, message: 'Format file KTP harus JPG Atau PNG' }, { status: 400 })
+    const ext = '.' + ktp_photo.name.split('.').pop()!.toLowerCase()
+    if (!ALLOWED_EXT.includes(ext) || (ktp_photo.type && !ktp_photo.type.startsWith('image/'))) {
+      return NextResponse.json({ success: false, message: 'Format file KTP harus JPG/JPEG atau PNG' }, { status: 400 })
     }
     if (!installation_address || installation_address.length < 10) {
       return NextResponse.json({ success: false, message: 'Alamat instalasi minimal 10 karakter' }, { status: 400 })
@@ -76,8 +76,9 @@ export async function POST(request: NextRequest) {
       if (front_house_photo.size > MAX_FILE_SIZE) {
         return NextResponse.json({ success: false, message: 'Ukuran foto rumah maksimal 5MB' }, { status: 400 })
       }
-      if (!ALLOWED_MIME.includes(front_house_photo.type) || !ALLOWED_EXT.includes('.' + front_house_photo.name.split('.').pop()!.toLowerCase())) {
-        return NextResponse.json({ success: false, message: 'Format foto rumah harus JPG Atau PNG' }, { status: 400 })
+      const rext = '.' + front_house_photo.name.split('.').pop()!.toLowerCase()
+      if (!ALLOWED_EXT.includes(rext) || (front_house_photo.type && !front_house_photo.type.startsWith('image/'))) {
+        return NextResponse.json({ success: false, message: 'Format foto rumah harus JPG/JPEG atau PNG' }, { status: 400 })
       }
     }
 
