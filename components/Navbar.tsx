@@ -83,8 +83,14 @@ export default function Navbar() {
         </div>
 
         {/* Mobile menu */}
-        {isOpen && (
-          <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-t border-slate-800 py-4 px-2">
+        <div
+          className={cn(
+            'md:hidden overflow-hidden bg-slate-900/95 backdrop-blur-md border-t border-slate-800 transition-all duration-300 ease-in-out',
+            isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 border-transparent'
+          )}
+          aria-hidden={!isOpen}
+        >
+          <div className="py-4 px-2">
             <div className="flex flex-col gap-2">
               {[
                 { label: 'Paket', id: 'pricing' },
@@ -107,7 +113,7 @@ export default function Navbar() {
               </button>
             </div>
           </div>
-        )}
+        </div>
       </nav>
     </header>
   )
